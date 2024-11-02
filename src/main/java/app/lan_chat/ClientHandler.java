@@ -1,5 +1,9 @@
 package app.lan_chat;
 
+import app.lan_chat.model.ExitMessage;
+import app.lan_chat.model.Message;
+import app.lan_chat.model.TextMessage;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -11,7 +15,6 @@ public class ClientHandler implements Runnable {
     private final ChatRoomServer server;
     private BufferedReader in;
     private PrintWriter out;
-    private String nickname;
 
     public ClientHandler(Socket clientSocket, ChatRoomServer server) {
         this.clientSocket = clientSocket;
@@ -23,20 +26,18 @@ public class ClientHandler implements Runnable {
         try {
             out = new PrintWriter(clientSocket.getOutputStream(), true);
             in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            out.println("Please enter your nickname:");
-            nickname = in.readLine();
-            System.out.println(nickname + " has joined the chat");
 
-            server.broadcast(nickname + " has joined the chat!");
+            // welcome message
+            sendMessage(new TextMessage("admin", "Welcome to the chat!"));
 
-            String message;
-            while ((message = in.readLine()) != null) {
-                if (message.equalsIgnoreCase("/exit")) {
-                    server.broadcast(nickname + " has left the chat.");
+            String jsonMessage;
+            while ((jsonMessage = in.readLine()) != null) {
+                Message message = MessageUtils.deserializeMessage(jsonMessage);
+                server.broadcast(message);
+
+                if (message instanceof ExitMessage) {
                     shutdown();
                     break;
-                } else {
-                    server.broadcast(nickname + ": " + message);
                 }
             }
         } catch (IOException e) {
@@ -46,8 +47,8 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    public void sendMessage(String message) {
-        out.println(message);
+    public void sendMessage(Message message) {
+        out.println(MessageUtils.serializeMessage(message));
     }
 
     public void shutdown() {
@@ -61,9 +62,5 @@ public class ClientHandler implements Runnable {
         } catch (IOException e) {
             System.err.println("Error shutting down client handler: " + e.getMessage());
         }
-    }
-
-    public String getNickname() {
-        return nickname;
     }
 }

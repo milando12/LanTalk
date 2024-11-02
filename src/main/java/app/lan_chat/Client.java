@@ -1,6 +1,9 @@
 package app.lan_chat;
 
 import app.lan_chat.model.ChatRoom;
+import app.lan_chat.model.ExitMessage;
+import app.lan_chat.model.Message;
+import app.lan_chat.model.TextMessage;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
@@ -13,10 +16,18 @@ public class Client implements Runnable {
     private BufferedReader in;
     private PrintWriter out;
     private boolean done;
+    private String username;
+
+    public Client() {
+        done = false;
+        username = "guest";
+    }
 
     @Override
     public void run() {
         try {
+            if (username.equals("guest")) promptUsername();
+
             List<ChatRoom> rooms = fetchAvailableRooms();
             displayAvailableRooms(rooms);
 
@@ -36,11 +47,23 @@ public class Client implements Runnable {
             // Read and print incoming messages
             String inMessage;
             while ((inMessage = in.readLine()) != null) {
-                System.out.println(inMessage);
+                Message message = MessageUtils.deserializeMessage(inMessage);
+                if (message.getSender() != null && !message.getSender().equals(username)) {
+                    System.out.println(message);
+                }
             }
         } catch (IOException e) {
             shutdown();
         }
+    }
+
+    /**
+     * Prompt the user to enter a username
+     */
+    private void promptUsername() {
+        Scanner scanner = new Scanner(System.in);
+        System.out.print("Enter a username: ");
+        username = scanner.nextLine();
     }
 
     /**
@@ -96,9 +119,6 @@ public class Client implements Runnable {
         int port = scanner.nextInt();   // TODO: handle invalid input
         scanner.nextLine();
 
-        // there can be a case where room does not exist in rooms
-        // but there is a room on the port
-
         for (ChatRoom room : rooms) {
             if (room.getPort() == port) {
                 return room;
@@ -135,17 +155,19 @@ public class Client implements Runnable {
             }
 
             if (conn.getResponseCode() == 200) {
-                System.out.println("New chat room created successfully on port " + port);
+                System.out.println("Chat room " + name + " successfully created on port " + port);
             } else {
                 // someone else created the room on the same port before us
-                System.out.println("Failed to create a new room.");
+                System.out.println("Failed to create a new room.\nPort " + port + " is already in use, please try again.");
                 conn.disconnect();
-                run();  // Restart the client
+                run();
                 return null;
             }
             conn.disconnect();
         } catch (Exception e) {
             System.out.println("Error creating new room: " + e.getMessage());
+            run();
+            return null;
         }
         return newRoom;
     }
@@ -169,15 +191,18 @@ public class Client implements Runnable {
         public void run() {
             try (Scanner scanner = new Scanner(System.in)) {
                 while (!done) {
-                    String message = scanner.nextLine();
-                    if (message.equalsIgnoreCase("/exit")) {
-                        out.println(message);   // tell the server that we are disconnecting
+                    String content = scanner.nextLine();
+                    if (content.equalsIgnoreCase("/exit")) {
+                        String jsonMessage = MessageUtils.serializeMessage(new ExitMessage(username, true));
+                        out.println(jsonMessage);   // tell the server that we are disconnecting
                         shutdown();
                     } else {
-                        out.println(message);
+                        String jsonMessage = MessageUtils.serializeMessage(new TextMessage(username, content));
+                        out.println(jsonMessage);
                     }
                 }
             } catch (Exception e) {
+                System.out.println("Error reading input: " + e.getMessage());
                 shutdown();
             }
         }

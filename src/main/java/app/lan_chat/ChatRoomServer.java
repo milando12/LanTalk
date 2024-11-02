@@ -1,5 +1,7 @@
 package app.lan_chat;
 
+import app.lan_chat.model.Message;
+
 import java.io.*;
 import java.net.*;
 import java.util.*;
@@ -37,9 +39,9 @@ public class ChatRoomServer implements Runnable {
         }
     }
 
-    public void broadcast(String message) {
+    public void broadcast(Message message) {
         for (ClientHandler client : clients) {
-            if (client != null && !message.startsWith(client.getNickname())) {
+            if (client != null ) {          // TODO: do not return the message to the client who has sent it
                 client.sendMessage(message);
             }
         }
